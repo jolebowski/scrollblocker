@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "ScrollBlocker",
+  "version": "1.0",
+  "description": "Bloque l'accès aux réseaux sociaux après un scroll prolongé.",
+  "permissions": ["storage", "notifications"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.facebook.com/*", "*://*.instagram.com/*", "*://*.twitter.com/*"],
+      "js": ["content.js"]
+    }
+  ]
+}
