@@ -1,6 +1,5 @@
 const siteInput = document.getElementById('siteInput')
 const minutesInput = document.getElementById('minutesInput')
-const siteStatus = document.getElementById('siteStatus')
 const siteList = document.getElementById('siteList')
 
 // Charger et afficher les sites bloqués
@@ -31,7 +30,8 @@ function displaySites(sites) {
   siteList.innerHTML = ''
 
   if (Object.keys(sites).length === 0) {
-    siteList.innerHTML = '<p style="color: #666; font-style: italic;">Aucun site bloqué</p>'
+    siteList.innerHTML = '<div class="no-sites">Aucun site bloqué</div>'
+    siteList.style.overflowY = 'hidden'
     return
   }
 
@@ -46,6 +46,14 @@ function displaySites(sites) {
     siteList.appendChild(siteItem)
   })
 
+  // Gérer intelligemment le scroll selon le nombre d'éléments
+  const itemCount = Object.keys(sites).length
+  if (itemCount <= 2) {
+    siteList.style.overflowY = 'hidden'
+  } else {
+    siteList.style.overflowY = 'auto'
+  }
+
   // Ajouter les event listeners pour les boutons de suppression
   document.querySelectorAll('.remove-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -55,17 +63,44 @@ function displaySites(sites) {
   })
 }
 
+// Fonction pour créer et afficher une toast notification
+function showToast(message, type = 'success') {
+  // Supprimer les toasts existantes
+  const existingToast = document.querySelector('.toast')
+  if (existingToast) {
+    existingToast.remove()
+  }
+
+  // Créer la nouvelle toast
+  const toast = document.createElement('div')
+  toast.className = `toast ${type}`
+
+  // Ajouter une icône selon le type
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✗' : '⚠'
+  toast.innerHTML = `<span style="font-weight: bold;">${icon}</span><span>${message}</span>`
+
+  // Ajouter au body
+  document.body.appendChild(toast)
+
+  // Animation d'entrée
+  setTimeout(() => toast.classList.add('show'), 10)
+
+  // Animation de sortie et suppression
+  setTimeout(() => {
+    toast.classList.remove('show')
+    setTimeout(() => toast.remove(), 300) // Temps de l'animation de sortie
+  }, 4000) // Durée d'affichage du message
+}
+
 // Ajouter un nouveau site
 function addSite(site, minutes) {
   if (!site || site.trim() === '') {
-    siteStatus.textContent = 'Veuillez entrer un nom de domaine'
-    siteStatus.style.color = 'red'
+    showToast('Veuillez entrer un nom de domaine', 'error')
     return
   }
 
   if (!minutes || minutes < 1) {
-    siteStatus.textContent = 'Veuillez entrer une durée valide (minimum 1 minute)'
-    siteStatus.style.color = 'red'
+    showToast('Durée minimum : 1 minute', 'error')
     return
   }
 
@@ -90,8 +125,7 @@ function addSite(site, minutes) {
     }
 
     if (sites[site]) {
-      siteStatus.textContent = 'Ce site est déjà dans la liste'
-      siteStatus.style.color = 'orange'
+      showToast('Site déjà dans la liste', 'warning')
       return
     }
 
@@ -101,8 +135,7 @@ function addSite(site, minutes) {
       const blockedKey = `scrollBlocked_${site}`
       const timeKey = `scrollTime_${site}`
       chrome.storage.local.remove([blockedKey, timeKey], () => {
-        siteStatus.innerHTML = `<strong>${site}</strong> ajouté (${minutes} min)<br/><small>⚠️ Rechargez la page ${site} pour activer le blocage</small>`
-        siteStatus.style.color = 'green'
+        showToast(`${site} ajouté (${minutes} min) - Rechargez la page ${site}`, 'success')
         siteInput.value = ''
         minutesInput.value = 5
         console.log(`Site ${site} ajouté et données (${blockedKey}, ${timeKey}) nettoyées`)
@@ -134,8 +167,7 @@ function removeSite(site) {
       const timeKey = `scrollTime_${site}`
       chrome.storage.local.set({ [blockedKey]: false }, () => {
         chrome.storage.local.remove(timeKey, () => {
-          siteStatus.innerHTML = `<strong>${site}</strong> supprimé (blocage désactivé)<br/><small>⚠️ Le site sera débloqué automatiquement</small>`
-          siteStatus.style.color = 'green'
+          showToast(`${site} supprimé - Débloqué automatiquement`, 'success')
           console.log(`Site ${site} supprimé, ${blockedKey} forcé à FALSE, ${timeKey} supprimé`)
           loadBlockedSites()
         })
