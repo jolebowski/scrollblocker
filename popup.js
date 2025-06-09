@@ -97,11 +97,17 @@ function addSite(site, minutes) {
 
     sites[site] = limitMs
     chrome.storage.local.set({ blockedSites: sites }, () => {
-      siteStatus.innerHTML = `<strong>${site}</strong> ajouté (${minutes} min)<br/><small>⚠️ Rechargez la page ${site} pour activer le blocage</small>`
-      siteStatus.style.color = 'green'
-      siteInput.value = ''
-      minutesInput.value = 5
-      loadBlockedSites()
+      // NETTOYAGE PRÉVENTIF: S'assurer qu'il n'y a pas de données résiduelles
+      const blockedKey = `scrollBlocked_${site}`
+      const timeKey = `scrollTime_${site}`
+      chrome.storage.local.remove([blockedKey, timeKey], () => {
+        siteStatus.innerHTML = `<strong>${site}</strong> ajouté (${minutes} min)<br/><small>⚠️ Rechargez la page ${site} pour activer le blocage</small>`
+        siteStatus.style.color = 'green'
+        siteInput.value = ''
+        minutesInput.value = 5
+        console.log(`Site ${site} ajouté et données (${blockedKey}, ${timeKey}) nettoyées`)
+        loadBlockedSites()
+      })
     })
   })
 }
@@ -123,13 +129,16 @@ function removeSite(site) {
     delete sites[site]
 
     chrome.storage.local.set({ blockedSites: sites }, () => {
-      // IMPORTANT: Supprimer seulement le flag de blocage pour CE site
+      // FORCER À FALSE au lieu de supprimer
       const blockedKey = `scrollBlocked_${site}`
-      chrome.storage.local.remove(blockedKey, () => {
-        siteStatus.innerHTML = `<strong>${site}</strong> supprimé (blocage réinitialisé)<br/><small>⚠️ Rechargez la page ${site} pour désactiver le blocage</small>`
-        siteStatus.style.color = 'green'
-        console.log(`Site ${site} supprimé et ${blockedKey} réinitialisé`)
-        loadBlockedSites()
+      const timeKey = `scrollTime_${site}`
+      chrome.storage.local.set({ [blockedKey]: false }, () => {
+        chrome.storage.local.remove(timeKey, () => {
+          siteStatus.innerHTML = `<strong>${site}</strong> supprimé (blocage désactivé)<br/><small>⚠️ Le site sera débloqué automatiquement</small>`
+          siteStatus.style.color = 'green'
+          console.log(`Site ${site} supprimé, ${blockedKey} forcé à FALSE, ${timeKey} supprimé`)
+          loadBlockedSites()
+        })
       })
     })
   })

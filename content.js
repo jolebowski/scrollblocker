@@ -58,12 +58,48 @@ function checkIfSiteIsBlocked() {
       initializeScrollBlocker()
     } else {
       console.log(`ScrollBlocker: Pas de blocage pour ${currentSite}`)
+      // Si le site n'est plus dans la liste mais était bloqué, le débloquer
+      const blockedKey = `scrollBlocked_${currentSite}`
+      chrome.storage.local.get([blockedKey], (data) => {
+        if (data[blockedKey] === true) {
+          console.log(
+            `ScrollBlocker: Site ${currentSite} supprimé de la liste - nettoyage du blocage`,
+          )
+          chrome.storage.local.remove([blockedKey, `scrollTime_${currentSite}`])
+          if (document.body.innerHTML.includes('🚫')) {
+            console.log(`ScrollBlocker: Rechargement automatique de la page`)
+            window.location.reload()
+          }
+        }
+      })
     }
   })
 }
 
 function initializeScrollBlocker() {
   const blockedKey = `scrollBlocked_${currentSite}`
+
+  // Vérifier périodiquement si le blocage a été levé
+  const checkBlockedStatus = () => {
+    chrome.storage.local.get([blockedKey], (data) => {
+      // Si la clé est explicitement mise à false
+      if (data[blockedKey] === false && hasBlocked) {
+        console.log(
+          `ScrollBlocker: Blocage levé pour ${currentSite} - ${blockedKey} = false détecté`,
+        )
+        hasBlocked = false
+        // Recharger automatiquement la page pour sortir de l'écran de blocage
+        if (document.body.innerHTML.includes('🚫')) {
+          console.log(`ScrollBlocker: Rechargement automatique de la page`)
+          window.location.reload()
+        }
+      }
+    })
+  }
+
+  // Vérifier toutes les 2 secondes si le blocage a été levé
+  setInterval(checkBlockedStatus, 2000)
+
   chrome.storage.local.get([blockedKey], (data) => {
     if (data[blockedKey] === true) {
       console.log(`ScrollBlocker: Site ${currentSite} déjà bloqué`)
@@ -126,3 +162,5 @@ function bloquerPage() {
 
 // Initialiser
 checkIfSiteIsBlocked()
+
+// Revérifier périodiquement si le site est toujours dans la liste
