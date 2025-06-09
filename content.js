@@ -12,7 +12,19 @@ console.log(`ScrollBlocker: Script chargé sur ${currentSite}`)
 function checkIfSiteIsBlocked() {
   console.log(`ScrollBlocker: Vérification du domaine: ${currentSite}`)
 
+  // Vérifier que l'API Chrome est disponible
+  if (typeof chrome === 'undefined' || !chrome.storage) {
+    console.error('ScrollBlocker: API Chrome storage non disponible')
+    return
+  }
+
   chrome.storage.local.get(['blockedSites'], (data) => {
+    // Vérifier les erreurs de runtime
+    if (chrome.runtime.lastError) {
+      console.error('ScrollBlocker: Erreur de storage:', chrome.runtime.lastError)
+      return
+    }
+
     let blockedSites = data.blockedSites || []
     console.log(`ScrollBlocker: Sites bloqués (format brut):`, blockedSites)
 
@@ -81,7 +93,16 @@ function initializeScrollBlocker() {
 
   // Vérifier périodiquement si le blocage a été levé
   const checkBlockedStatus = () => {
+    if (typeof chrome === 'undefined' || !chrome.storage) {
+      return
+    }
+
     chrome.storage.local.get([blockedKey], (data) => {
+      if (chrome.runtime.lastError) {
+        console.error('ScrollBlocker: Erreur de storage:', chrome.runtime.lastError)
+        return
+      }
+
       // Si la clé est explicitement mise à false
       if (data[blockedKey] === false && hasBlocked) {
         console.log(
@@ -100,7 +121,17 @@ function initializeScrollBlocker() {
   // Vérifier toutes les 2 secondes si le blocage a été levé
   setInterval(checkBlockedStatus, 2000)
 
+  if (typeof chrome === 'undefined' || !chrome.storage) {
+    console.error("ScrollBlocker: API Chrome storage non disponible pour l'initialisation")
+    return
+  }
+
   chrome.storage.local.get([blockedKey], (data) => {
+    if (chrome.runtime.lastError) {
+      console.error('ScrollBlocker: Erreur de storage:', chrome.runtime.lastError)
+      return
+    }
+
     if (data[blockedKey] === true) {
       console.log(`ScrollBlocker: Site ${currentSite} déjà bloqué`)
       bloquerPage()
@@ -143,8 +174,23 @@ function onScrollEnd() {
     if (totalTime >= scrollLimit && !hasBlocked) {
       hasBlocked = true
       console.log(`ScrollBlocker: Limite atteinte pour ${currentSite}!`)
+
+      if (typeof chrome === 'undefined' || !chrome.storage) {
+        console.error(
+          'ScrollBlocker: API Chrome storage non disponible pour sauvegarder le blocage',
+        )
+        // Continuer quand même avec le blocage visuel
+        alert(`Tu as scrollé trop longtemps sur ${currentSite}. Fais une pause !`)
+        bloquerPage()
+        return
+      }
+
       const blockedKey = `scrollBlocked_${currentSite}`
-      chrome.storage.local.set({ [blockedKey]: true })
+      chrome.storage.local.set({ [blockedKey]: true }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('ScrollBlocker: Erreur lors de la sauvegarde:', chrome.runtime.lastError)
+        }
+      })
       alert(`Tu as scrollé trop longtemps sur ${currentSite}. Fais une pause !`)
       bloquerPage()
     }
