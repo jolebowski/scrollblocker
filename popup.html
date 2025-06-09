@@ -60,7 +60,7 @@
         margin: 0 0 10px 0;
         color: #333;
       }
-      #status {
+      #siteStatus {
         color: #666;
         font-size: 12px;
       }
@@ -68,17 +68,18 @@
   </head>
   <body>
     <div class="section">
-      <h4>⏱️ Limite de scroll</h4>
-      <p>Définis ta limite :</p>
-      <input type="number" id="minutes" min="1" value="1" /> minute(s)<br />
-      <button id="save">Enregistrer</button>
-      <p id="status"></p>
-    </div>
-
-    <div class="section">
       <h4>🌐 Sites bloqués</h4>
       <p>Ajouter un site :</p>
       <input type="text" id="siteInput" placeholder="exemple.com" />
+      <input
+        type="number"
+        id="minutesInput"
+        min="1"
+        value="5"
+        placeholder="5"
+        style="width: 60px"
+      />
+      <span>min</span>
       <button id="addSite">Ajouter</button>
       <p id="siteStatus"></p>
 
@@ -96,8 +97,8 @@
           color: #666;
         "
       >
-        <strong>ℹ️ Info :</strong> Après toute modification (ajout/suppression de sites, changement
-        de limite), rechargez les pages concernées pour appliquer les changements.
+        <strong>ℹ️ Info :</strong> Après toute modification, rechargez les pages concernées pour
+        appliquer les changements.
       </div>
     </div>
 

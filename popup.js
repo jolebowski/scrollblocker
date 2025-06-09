@@ -1,21 +1,26 @@
-const input = document.getElementById('minutes')
-const status = document.getElementById('status')
 const siteInput = document.getElementById('siteInput')
+const minutesInput = document.getElementById('minutesInput')
 const siteStatus = document.getElementById('siteStatus')
 const siteList = document.getElementById('siteList')
-
-// Charger la valeur actuelle du temps
-chrome.storage.local.get('scrollTimeLimit', (data) => {
-  const ms = data.scrollTimeLimit ?? 60000
-  input.value = ms / 60000
-  console.log(`Valeur chargée depuis chrome.storage : ${ms} ms`)
-})
 
 // Charger et afficher les sites bloqués
 function loadBlockedSites() {
   chrome.storage.local.get('blockedSites', (data) => {
     console.log('loadBlockedSites - data reçue:', data)
-    const sites = data.blockedSites || []
+    let sites = data.blockedSites || []
+
+    // MIGRATION : Convertir ancien format (array) vers nouveau format (object)
+    if (Array.isArray(sites)) {
+      console.log('Migration du format array vers object')
+      const newFormat = {}
+      sites.forEach((site) => {
+        newFormat[site] = 300000 // 5 minutes par défaut pour les anciens sites
+      })
+      sites = newFormat
+      // Sauvegarder le nouveau format
+      chrome.storage.local.set({ blockedSites: sites })
+    }
+
     console.log('Sites à afficher:', sites)
     displaySites(sites)
   })
@@ -24,11 +29,18 @@ function loadBlockedSites() {
 // Afficher les sites dans la liste
 function displaySites(sites) {
   siteList.innerHTML = ''
-  sites.forEach((site) => {
+
+  if (Object.keys(sites).length === 0) {
+    siteList.innerHTML = '<p style="color: #666; font-style: italic;">Aucun site bloqué</p>'
+    return
+  }
+
+  Object.entries(sites).forEach(([site, limitMs]) => {
+    const limitMinutes = Math.round(limitMs / 60000)
     const siteItem = document.createElement('div')
     siteItem.className = 'site-item'
     siteItem.innerHTML = `
-      <span>${site}</span>
+      <span><strong>${site}</strong> - ${limitMinutes} min</span>
       <button class="remove-btn" data-site="${site}">✕</button>
     `
     siteList.appendChild(siteItem)
@@ -44,9 +56,15 @@ function displaySites(sites) {
 }
 
 // Ajouter un nouveau site
-function addSite(site) {
+function addSite(site, minutes) {
   if (!site || site.trim() === '') {
     siteStatus.textContent = 'Veuillez entrer un nom de domaine'
+    siteStatus.style.color = 'red'
+    return
+  }
+
+  if (!minutes || minutes < 1) {
+    siteStatus.textContent = 'Veuillez entrer une durée valide (minimum 1 minute)'
     siteStatus.style.color = 'red'
     return
   }
@@ -57,20 +75,32 @@ function addSite(site) {
   site = site.replace(/^www\./, '')
   site = site.split('/')[0] // Prendre seulement le domaine
 
-  chrome.storage.local.get('blockedSites', (data) => {
-    const sites = data.blockedSites || []
+  const limitMs = minutes * 60 * 1000
 
-    if (sites.includes(site)) {
+  chrome.storage.local.get('blockedSites', (data) => {
+    let sites = data.blockedSites || {}
+
+    // Assurer la compatibilité avec l'ancien format
+    if (Array.isArray(sites)) {
+      const newFormat = {}
+      sites.forEach((s) => {
+        newFormat[s] = 300000 // 5 minutes par défaut
+      })
+      sites = newFormat
+    }
+
+    if (sites[site]) {
       siteStatus.textContent = 'Ce site est déjà dans la liste'
       siteStatus.style.color = 'orange'
       return
     }
 
-    sites.push(site)
+    sites[site] = limitMs
     chrome.storage.local.set({ blockedSites: sites }, () => {
-      siteStatus.innerHTML = `<strong>${site}</strong> ajouté avec succès<br/><small>⚠️ Rechargez la page ${site} pour activer le blocage</small>`
+      siteStatus.innerHTML = `<strong>${site}</strong> ajouté (${minutes} min)<br/><small>⚠️ Rechargez la page ${site} pour activer le blocage</small>`
       siteStatus.style.color = 'green'
       siteInput.value = ''
+      minutesInput.value = 5
       loadBlockedSites()
     })
   })
@@ -79,15 +109,26 @@ function addSite(site) {
 // Supprimer un site
 function removeSite(site) {
   chrome.storage.local.get('blockedSites', (data) => {
-    const sites = data.blockedSites || []
-    const updatedSites = sites.filter((s) => s !== site)
+    let sites = data.blockedSites || {}
 
-    chrome.storage.local.set({ blockedSites: updatedSites }, () => {
-      // IMPORTANT: Quand on enlève un site, on reset aussi le flag de blocage
-      chrome.storage.local.remove('scrollBlocked', () => {
+    // Assurer la compatibilité avec l'ancien format
+    if (Array.isArray(sites)) {
+      const newFormat = {}
+      sites.forEach((s) => {
+        newFormat[s] = 300000
+      })
+      sites = newFormat
+    }
+
+    delete sites[site]
+
+    chrome.storage.local.set({ blockedSites: sites }, () => {
+      // IMPORTANT: Supprimer seulement le flag de blocage pour CE site
+      const blockedKey = `scrollBlocked_${site}`
+      chrome.storage.local.remove(blockedKey, () => {
         siteStatus.innerHTML = `<strong>${site}</strong> supprimé (blocage réinitialisé)<br/><small>⚠️ Rechargez la page ${site} pour désactiver le blocage</small>`
         siteStatus.style.color = 'green'
-        console.log(`Site ${site} supprimé et scrollBlocked réinitialisé`)
+        console.log(`Site ${site} supprimé et ${blockedKey} réinitialisé`)
         loadBlockedSites()
       })
     })
@@ -95,25 +136,26 @@ function removeSite(site) {
 }
 
 // Event listeners
-document.getElementById('save').addEventListener('click', () => {
-  const mins = parseInt(input.value)
-  const ms = mins * 60 * 1000
-  chrome.storage.local.set({ scrollTimeLimit: ms }, () => {
-    chrome.storage.local.remove('scrollBlocked')
-    console.log(`Nouvelle valeur enregistrée : ${ms} ms`)
-    status.innerHTML = `Limite définie à <strong>${mins} minute(s)</strong><br/><small>⚠️ Rechargez les pages des sites bloqués pour appliquer la nouvelle limite</small>`
-    status.style.color = 'green'
-  })
-})
-
 document.getElementById('addSite').addEventListener('click', () => {
-  addSite(siteInput.value)
+  const site = siteInput.value
+  const minutes = parseInt(minutesInput.value)
+  addSite(site, minutes)
 })
 
 // Permettre d'ajouter un site en appuyant sur Entrée
 siteInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
-    addSite(siteInput.value)
+    const site = siteInput.value
+    const minutes = parseInt(minutesInput.value)
+    addSite(site, minutes)
+  }
+})
+
+minutesInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    const site = siteInput.value
+    const minutes = parseInt(minutesInput.value)
+    addSite(site, minutes)
   }
 })
 
