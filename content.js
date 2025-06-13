@@ -2,119 +2,140 @@ let scrollStart = Date.now()
 let totalTime = 0
 let timer
 let hasBlocked = false
-let scrollLimit = 60000 // fallback
+let scrollLimit = 60000 // fallback par défaut
 let isScrolling = false
-let currentSite = window.location.hostname
+console.log('🔵 CONTENT - Hostname original:', window.location.hostname)
+let currentSite = window.location.hostname.replace(/^www\./, '')
+console.log('🔵 CONTENT - Hostname nettoyé:', currentSite)
 
-console.log(`ScrollBlocker: Script chargé sur ${currentSite}`)
-
-// Vérifier si ce site doit être bloqué
+/**
+ * Vérifie si le site actuel doit être bloqué selon la configuration
+ * Gère la compatibilité entre ancien format (array) et nouveau format (object)
+ * Lance l'initialisation du blocage si le site est dans la liste
+ */
 function checkIfSiteIsBlocked() {
-  console.log(`ScrollBlocker: Vérification du domaine: ${currentSite}`)
-
   // Vérifier que l'API Chrome est disponible
   if (typeof chrome === 'undefined' || !chrome.storage) {
-    console.error('ScrollBlocker: API Chrome storage non disponible')
     return
   }
 
   chrome.storage.local.get(['blockedSites'], (data) => {
-    // Vérifier les erreurs de runtime
     if (chrome.runtime.lastError) {
-      console.error('ScrollBlocker: Erreur de storage:', chrome.runtime.lastError)
       return
     }
 
     let blockedSites = data.blockedSites || []
-    console.log(`ScrollBlocker: Sites bloqués (format brut):`, blockedSites)
-
-    // Gérer les deux formats : array (ancien) et object (nouveau)
     let siteLimit = null
     let isBlocked = false
 
     if (Array.isArray(blockedSites)) {
-      // Ancien format : array simple
-      console.log(`ScrollBlocker: Utilisation de l'ancien format (array)`)
+      // Ancien format : array simple ['site1', 'site2']
       isBlocked = blockedSites.some((site) => {
         const isMatch = currentSite === site || currentSite.endsWith('.' + site)
         if (isMatch) {
-          console.log(`ScrollBlocker: Match trouvé! ${currentSite} correspond à ${site}`)
           siteLimit = null // Utilisera la limite globale
         }
         return isMatch
       })
     } else {
-      // Nouveau format : object avec limites individuelles
-      console.log(`ScrollBlocker: Utilisation du nouveau format (object)`)
+      // Nouveau format : object {'site1': timeMs, 'site2': timeMs}
       for (const [site, limitMs] of Object.entries(blockedSites)) {
         const isMatch = currentSite === site || currentSite.endsWith('.' + site)
         if (isMatch) {
           isBlocked = true
           siteLimit = limitMs
-          console.log(
-            `ScrollBlocker: Match trouvé! ${currentSite} correspond à ${site} avec limite ${limitMs}ms`,
-          )
           break
         }
       }
     }
 
-    console.log(`ScrollBlocker: Site bloqué? ${isBlocked}, Limite spécifique: ${siteLimit}`)
-
     if (isBlocked) {
       if (siteLimit) {
         scrollLimit = parseInt(siteLimit)
-        console.log(`ScrollBlocker: Utilisation de la limite spécifique: ${scrollLimit}ms`)
       }
-      console.log(`ScrollBlocker: Initialisation du blocage pour ${currentSite}`)
       initializeScrollBlocker()
     } else {
-      console.log(`ScrollBlocker: Pas de blocage pour ${currentSite}`)
-      // Si le site n'est plus dans la liste mais était bloqué, le débloquer
+      // Nettoyer les données si le site a été retiré de la liste
       const blockedKey = `scrollBlocked_${currentSite}`
       chrome.storage.local.get([blockedKey], (data) => {
         if (data[blockedKey] === true) {
-          console.log(
-            `ScrollBlocker: Site ${currentSite} supprimé de la liste - nettoyage du blocage`,
-          )
-          chrome.storage.local.remove([blockedKey, `scrollTime_${currentSite}`])
-          if (document.body.innerHTML.includes('🚫')) {
-            console.log(`ScrollBlocker: Rechargement automatique de la page`)
-            window.location.reload()
-          }
+          // Mettre la clé à false au lieu de la supprimer pour être cohérent
+          chrome.storage.local.set({ [blockedKey]: false }, () => {
+            chrome.storage.local.remove([`scrollTime_${currentSite}`])
+            if (document.body.innerHTML.includes('🚫')) {
+              window.location.reload()
+            }
+          })
         }
       })
     }
   })
 }
 
+/**
+ * Initialise le système de blocage pour le site actuel
+ * - Configure un vérificateur périodique pour les changements de statut
+ * - Active le listener de scroll si le site n'est pas déjà bloqué
+ */
 function initializeScrollBlocker() {
   const blockedKey = `scrollBlocked_${currentSite}`
 
-  // Vérifier périodiquement si le blocage a été levé
+  /**
+   * Fonction interne qui vérifie périodiquement si le blocage a été levé
+   * depuis le popup (clé mise à false) ou si le site a été retiré de la liste
+   */
   const checkBlockedStatus = () => {
     if (typeof chrome === 'undefined' || !chrome.storage) {
       return
     }
 
-    chrome.storage.local.get([blockedKey], (data) => {
+    // Vérifier d'abord si le site est encore dans la liste des sites bloqués
+    chrome.storage.local.get(['blockedSites'], (data) => {
       if (chrome.runtime.lastError) {
-        console.error('ScrollBlocker: Erreur de storage:', chrome.runtime.lastError)
         return
       }
 
-      // Si la clé est explicitement mise à false
-      if (data[blockedKey] === false && hasBlocked) {
-        console.log(
-          `ScrollBlocker: Blocage levé pour ${currentSite} - ${blockedKey} = false détecté`,
-        )
-        hasBlocked = false
-        // Recharger automatiquement la page pour sortir de l'écran de blocage
-        if (document.body.innerHTML.includes('🚫')) {
-          console.log(`ScrollBlocker: Rechargement automatique de la page`)
-          window.location.reload()
+      let blockedSites = data.blockedSites || []
+      let isStillInList = false
+
+      if (Array.isArray(blockedSites)) {
+        // Ancien format : array simple
+        isStillInList = blockedSites.some((site) => {
+          return currentSite === site || currentSite.endsWith('.' + site)
+        })
+      } else {
+        // Nouveau format : object
+        for (const site of Object.keys(blockedSites)) {
+          if (currentSite === site || currentSite.endsWith('.' + site)) {
+            isStillInList = true
+            break
+          }
         }
       }
+
+      // Si le site n'est plus dans la liste et qu'on est sur l'écran de blocage
+      if (!isStillInList && document.body.innerHTML.includes('🚫')) {
+        // Nettoyer les données et recharger
+        chrome.storage.local.remove([blockedKey, `scrollTime_${currentSite}`])
+        window.location.reload()
+        return
+      }
+
+      // Vérifier ensuite le statut de blocage individuel
+      chrome.storage.local.get([blockedKey], (data) => {
+        if (chrome.runtime.lastError) {
+          return
+        }
+
+        // Si la clé est explicitement mise à false (déblocage depuis popup)
+        if (data[blockedKey] === false && hasBlocked) {
+          hasBlocked = false
+          // Recharger automatiquement si on est sur l'écran de blocage
+          if (document.body.innerHTML.includes('🚫')) {
+            window.location.reload()
+          }
+        }
+      })
     })
   }
 
@@ -122,36 +143,37 @@ function initializeScrollBlocker() {
   setInterval(checkBlockedStatus, 2000)
 
   if (typeof chrome === 'undefined' || !chrome.storage) {
-    console.error("ScrollBlocker: API Chrome storage non disponible pour l'initialisation")
     return
   }
 
   chrome.storage.local.get([blockedKey], (data) => {
     if (chrome.runtime.lastError) {
-      console.error('ScrollBlocker: Erreur de storage:', chrome.runtime.lastError)
       return
     }
 
     if (data[blockedKey] === true) {
-      console.log(`ScrollBlocker: Site ${currentSite} déjà bloqué`)
+      // Site déjà bloqué, afficher l'écran de blocage
       bloquerPage()
       return
     }
 
-    console.log(`ScrollBlocker: Activation du listener de scroll (limite finale: ${scrollLimit}ms)`)
+    // Activer le listener de scroll
     window.addEventListener('scroll', onScrollStart)
   })
 }
 
+/**
+ * Démarre ou continue une session de scroll
+ * Utilise un timer de 1 seconde pour détecter la fin du scroll
+ */
 function onScrollStart() {
-  // Si on n'était pas en train de scroller, on commence une nouvelle session
+  // Commencer une nouvelle session si on ne scrollait pas déjà
   if (!isScrolling) {
     isScrolling = true
     scrollStart = Date.now()
-    console.log(`ScrollBlocker: Début de session de scroll sur ${currentSite}`)
   }
 
-  // Réinitialiser le timer à chaque scroll
+  // Réinitialiser le timer à chaque mouvement de scroll
   clearTimeout(timer)
 
   // Programmer l'arrêt du scroll après 1 seconde d'inactivité
@@ -160,6 +182,10 @@ function onScrollStart() {
   }, 1000)
 }
 
+/**
+ * Termine une session de scroll et cumule le temps
+ * Vérifie si la limite est atteinte et bloque le site si nécessaire
+ */
 function onScrollEnd() {
   if (isScrolling) {
     const now = Date.now()
@@ -167,36 +193,38 @@ function onScrollEnd() {
     totalTime += sessionTime
     isScrolling = false
 
-    console.log(
-      `ScrollBlocker: Fin de session sur ${currentSite}. Durée: ${sessionTime}ms. Total: ${totalTime}ms / Limite: ${scrollLimit}ms`,
-    )
-
+    // Vérifier si la limite est atteinte
     if (totalTime >= scrollLimit && !hasBlocked) {
       hasBlocked = true
-      console.log(`ScrollBlocker: Limite atteinte pour ${currentSite}!`)
 
       if (typeof chrome === 'undefined' || !chrome.storage) {
-        console.error(
-          'ScrollBlocker: API Chrome storage non disponible pour sauvegarder le blocage',
-        )
-        // Continuer quand même avec le blocage visuel
+        // Continuer avec le blocage visuel même si pas d'API
         alert(`Tu as scrollé trop longtemps sur ${currentSite}. Fais une pause !`)
         bloquerPage()
         return
       }
 
+      // Sauvegarder le statut de blocage
       const blockedKey = `scrollBlocked_${currentSite}`
+      console.log(`🔴 CONTENT - Blocage activé pour ${currentSite}, clé: ${blockedKey}`)
       chrome.storage.local.set({ [blockedKey]: true }, () => {
         if (chrome.runtime.lastError) {
-          console.error('ScrollBlocker: Erreur lors de la sauvegarde:', chrome.runtime.lastError)
+          // Erreur silencieuse, le blocage visuel fonctionnera quand même
+          console.log(`❌ CONTENT - Erreur sauvegarde:`, chrome.runtime.lastError)
+        } else {
+          console.log(`✅ CONTENT - Clé ${blockedKey} sauvegardée avec valeur: true`)
         }
       })
+
       alert(`Tu as scrollé trop longtemps sur ${currentSite}. Fais une pause !`)
       bloquerPage()
     }
   }
 }
 
+/**
+ * Remplace le contenu de la page par un écran de blocage
+ */
 function bloquerPage() {
   document.body.innerHTML = `
     <div style="text-align:center; margin-top:20%; font-size: 24px;">
@@ -206,7 +234,7 @@ function bloquerPage() {
   `
 }
 
-// Initialiser
+// Initialiser le système
 checkIfSiteIsBlocked()
 
 // Revérifier périodiquement si le site est toujours dans la liste

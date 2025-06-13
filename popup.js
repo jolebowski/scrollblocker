@@ -2,15 +2,16 @@ const siteInput = document.getElementById('siteInput')
 const minutesInput = document.getElementById('minutesInput')
 const siteList = document.getElementById('siteList')
 
-// Charger et afficher les sites bloqués
+/**
+ * Charge les sites bloqués depuis le storage et les affiche
+ * Gère automatiquement la migration de l'ancien format (array) vers le nouveau (object)
+ */
 function loadBlockedSites() {
   chrome.storage.local.get('blockedSites', (data) => {
-    console.log('loadBlockedSites - data reçue:', data)
     let sites = data.blockedSites || []
 
-    // MIGRATION : Convertir ancien format (array) vers nouveau format (object)
+    // Migration automatique : ancien format (array) vers nouveau format (object)
     if (Array.isArray(sites)) {
-      console.log('Migration du format array vers object')
       const newFormat = {}
       sites.forEach((site) => {
         newFormat[site] = 300000 // 5 minutes par défaut pour les anciens sites
@@ -20,12 +21,14 @@ function loadBlockedSites() {
       chrome.storage.local.set({ blockedSites: sites })
     }
 
-    console.log('Sites à afficher:', sites)
     displaySites(sites)
   })
 }
 
-// Afficher les sites dans la liste
+/**
+ * Affiche la liste des sites bloqués dans l'interface
+ * Gère intelligemment l'affichage du scroll selon le nombre d'éléments
+ */
 function displaySites(sites) {
   siteList.innerHTML = ''
 
@@ -63,9 +66,13 @@ function displaySites(sites) {
   })
 }
 
-// Fonction pour créer et afficher une toast notification
+/**
+ * Crée et affiche une notification toast avec animation
+ * @param {string} message - Message à afficher
+ * @param {string} type - Type de notification ('success', 'error', 'warning')
+ */
 function showToast(message, type = 'success') {
-  // Supprimer les toasts existantes
+  // Supprimer les toasts existants pour éviter les doublons
   const existingToast = document.querySelector('.toast')
   if (existingToast) {
     existingToast.remove()
@@ -79,20 +86,23 @@ function showToast(message, type = 'success') {
   const icon = type === 'success' ? '✓' : type === 'error' ? '✗' : '⚠'
   toast.innerHTML = `<span style="font-weight: bold;">${icon}</span><span>${message}</span>`
 
-  // Ajouter au body
+  // Ajouter au DOM
   document.body.appendChild(toast)
 
-  // Animation d'entrée
+  // Animation d'entrée après un court délai
   setTimeout(() => toast.classList.add('show'), 10)
 
-  // Animation de sortie et suppression
+  // Animation de sortie et suppression automatique
   setTimeout(() => {
     toast.classList.remove('show')
     setTimeout(() => toast.remove(), 300) // Temps de l'animation de sortie
   }, 4000) // Durée d'affichage du message
 }
 
-// Ajouter un nouveau site
+/**
+ * Ajoute un nouveau site à la liste des sites bloqués
+ * Nettoie et valide le domaine avant ajout
+ */
 function addSite(site, minutes) {
   if (!site || site.trim() === '') {
     showToast('Veuillez entrer un nom de domaine', 'error')
@@ -104,7 +114,7 @@ function addSite(site, minutes) {
     return
   }
 
-  // Nettoyer le domaine (enlever http/https et www)
+  // Nettoyer le domaine (enlever protocoles, www et chemins)
   site = site.trim().toLowerCase()
   site = site.replace(/^https?:\/\//, '')
   site = site.replace(/^www\./, '')
@@ -131,21 +141,23 @@ function addSite(site, minutes) {
 
     sites[site] = limitMs
     chrome.storage.local.set({ blockedSites: sites }, () => {
-      // NETTOYAGE PRÉVENTIF: S'assurer qu'il n'y a pas de données résiduelles
+      // Nettoyage préventif des données résiduelles
       const blockedKey = `scrollBlocked_${site}`
       const timeKey = `scrollTime_${site}`
       chrome.storage.local.remove([blockedKey, timeKey], () => {
         showToast(`${site} ajouté (${minutes} min) - Rechargez la page ${site}`, 'success')
         siteInput.value = ''
         minutesInput.value = 5
-        console.log(`Site ${site} ajouté et données (${blockedKey}, ${timeKey}) nettoyées`)
         loadBlockedSites()
       })
     })
   })
 }
 
-// Supprimer un site
+/**
+ * Supprime un site de la liste des sites bloqués
+ * Force le déblocage immédiat en mettant la clé à false
+ */
 function removeSite(site) {
   chrome.storage.local.get('blockedSites', (data) => {
     let sites = data.blockedSites || {}
@@ -162,43 +174,41 @@ function removeSite(site) {
     delete sites[site]
 
     chrome.storage.local.set({ blockedSites: sites }, () => {
-      // FORCER À FALSE au lieu de supprimer
+      // Vérifier d'abord si le site est actuellement bloqué
       const blockedKey = `scrollBlocked_${site}`
       const timeKey = `scrollTime_${site}`
-      chrome.storage.local.set({ [blockedKey]: false }, () => {
-        chrome.storage.local.remove(timeKey, () => {
-          showToast(`${site} supprimé - Débloqué automatiquement`, 'success')
-          console.log(`Site ${site} supprimé, ${blockedKey} forcé à FALSE, ${timeKey} supprimé`)
-          loadBlockedSites()
+
+      chrome.storage.local.get([blockedKey], (data) => {
+
+        // Vérifier si la valeur est true (booléen) ou 'true' (string)
+        const isCurrentlyBlocked = data[blockedKey] === true || data[blockedKey] === 'true'
+
+        // Forcer le déblocage en mettant la clé à false (au lieu de supprimer)
+        // Cela permet la détection immédiate par le content script
+        chrome.storage.local.set({ [blockedKey]: false }, () => {
+          chrome.storage.local.remove(timeKey, () => {
+            // Message adapté selon l'état du site
+            const message = isCurrentlyBlocked
+              ? `${site} supprimé - Débloqué automatiquement`
+              : `${site} supprimé de la liste`
+
+            console.log(`   - Message affiché: "${message}"`)
+            showToast(message, 'success')
+            loadBlockedSites()
+          })
         })
       })
     })
   })
 }
 
-// Event listeners
+// === EVENT LISTENERS ===
+
 document.getElementById('addSite').addEventListener('click', () => {
   const site = siteInput.value
   const minutes = parseInt(minutesInput.value)
   addSite(site, minutes)
 })
 
-// Permettre d'ajouter un site en appuyant sur Entrée
-siteInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    const site = siteInput.value
-    const minutes = parseInt(minutesInput.value)
-    addSite(site, minutes)
-  }
-})
-
-minutesInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    const site = siteInput.value
-    const minutes = parseInt(minutesInput.value)
-    addSite(site, minutes)
-  }
-})
-
-// Charger les sites au démarrage
+// Initialisation : charger les sites au démarrage
 loadBlockedSites()
