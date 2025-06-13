@@ -227,9 +227,29 @@ function onScrollEnd() {
  */
 function bloquerPage() {
   document.body.innerHTML = `
-    <div style="text-align:center; margin-top:20%; font-size: 24px;">
-      <p>🚫 <strong>Temps écoulé sur ${currentSite}.</strong></p>
-      <p><strong>Reviens plus tard.</strong></p>
+    <div style="
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 999999;
+    ">
+      <div style="
+        text-align: center;
+        color: white;
+        font-size: 24px;
+        padding: 20px;
+        background-color: rgba(0, 0, 0, 0.5);
+        border-radius: 10px;
+      ">
+        <p>🚫 <strong>Temps écoulé sur ${currentSite}.</strong></p>
+        <p><strong>Reviens plus tard.</strong></p>
+      </div>
     </div>
   `
 }
