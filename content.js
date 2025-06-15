@@ -197,10 +197,7 @@ function onScrollEnd() {
 
       if (typeof chrome === 'undefined' || !chrome.storage) {
         // Continuer avec le blocage visuel même si pas d'API
-        showNotification(
-          `Tu as scrollé trop longtemps sur ${currentSite}. Fais une pause !`,
-          'warning',
-        )
+        alert(`Tu as scrollé trop longtemps sur ${currentSite}. Fais une pause !`)
         bloquerPage()
         return
       }
@@ -216,10 +213,7 @@ function onScrollEnd() {
         }
       })
 
-      showNotification(
-        `Tu as scrollé trop longtemps sur ${currentSite}. Fais une pause !`,
-        'warning',
-      )
+      alert(`Tu as scrollé trop longtemps sur ${currentSite}. Fais une pause !`)
       bloquerPage()
     }
   }
@@ -273,47 +267,6 @@ function bloquerPage() {
       </div>
     </div>
   `
-}
-
-function showNotification(message, type = 'warning') {
-  const toast = document.createElement('div')
-  toast.className = `scroll-blocker-toast ${type}`
-  toast.innerHTML = `
-    <span style="font-weight: bold;">${type === 'warning' ? '⚠' : '✓'}</span>
-    <span>${message}</span>
-  `
-
-  // Styles pour la notification
-  Object.assign(toast.style, {
-    position: 'fixed',
-    top: '20px',
-    right: '20px',
-    padding: '12px 16px',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '500',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-    zIndex: '999999',
-    backgroundColor: type === 'warning' ? '#fff3cd' : '#d4edda',
-    color: type === 'warning' ? '#856404' : '#155724',
-    borderLeft: `4px solid ${type === 'warning' ? '#ffc107' : '#28a745'}`,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    transform: 'translateX(100%)',
-    transition: 'transform 0.3s ease',
-  })
-
-  document.body.appendChild(toast)
-
-  // Animation d'entrée
-  setTimeout(() => (toast.style.transform = 'translateX(0)'), 10)
-
-  // Animation de sortie et suppression
-  setTimeout(() => {
-    toast.style.transform = 'translateX(100%)'
-    setTimeout(() => toast.remove(), 300)
-  }, 4000)
 }
 
 // Initialiser le système
