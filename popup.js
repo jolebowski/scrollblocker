@@ -120,6 +120,21 @@ function addSite(site, minutes) {
   site = site.replace(/^www\./, '')
   site = site.split('/')[0]
 
+  // Nouvelles validations
+  if (site.length > 253) {
+    // Longueur maximale d'un nom de domaine
+    showToast('Le nom de domaine est trop long', 'error')
+    return
+  }
+
+  if (
+    !/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\.[a-z]{2,}$/.test(
+      site,
+    )
+  ) {
+    showToast('Format de domaine invalide (exemple: exemple.com)', 'error')
+    return
+  }
   const limitMs = minutes * 60 * 1000
 
   chrome.storage.local.get('blockedSites', (data) => {
@@ -197,7 +212,6 @@ function removeSite(site) {
               ? `${site} supprimé - Débloqué automatiquement`
               : `${site} supprimé de la liste`
 
-            console.log(`   - Message affiché: "${message}"`)
             showToast(message, 'success')
             loadBlockedSites()
           })

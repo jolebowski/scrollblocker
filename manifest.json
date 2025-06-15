@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ScrollBlocker",
-  "version": "1.0",
+  "version": "1.0.0",
   "description": "Bloque l'accès aux réseaux sociaux après un scroll prolongé.",
   "permissions": ["storage"],
   "action": {
