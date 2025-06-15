@@ -252,6 +252,24 @@ function bloquerPage() {
       ">
         <p>🚫 <strong>Temps écoulé sur ${currentSite}.</strong></p>
         <p><strong>Reviens plus tard.</strong></p>
+        <div style="
+          font-size: 16px;
+          margin-top: 15px;
+          padding: 15px;
+          background-color: rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+        ">
+          <p style="margin-bottom: 10px;">💡 Pour débloquer le site :</p>
+          <ol style="
+            text-align: left;
+            margin: 0;
+            padding-left: 20px;
+          ">
+            <li>Clique sur l'icône ScrollBlocker dans la barre d'outils</li>
+            <li>Trouve ${currentSite} dans la liste</li>
+            <li>Clique sur le bouton ✕ pour le débloquer</li>
+          </ol>
+        </div>
       </div>
     </div>
   `
