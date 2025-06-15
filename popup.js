@@ -114,16 +114,22 @@ function addSite(site, minutes) {
     return
   }
 
-  // Nettoyer le domaine (enlever protocoles, www et chemins)
+  // Nettoyer le domaine
   site = site.trim().toLowerCase()
   site = site.replace(/^https?:\/\//, '')
   site = site.replace(/^www\./, '')
-  site = site.split('/')[0] // Prendre seulement le domaine
+  site = site.split('/')[0]
 
   const limitMs = minutes * 60 * 1000
 
   chrome.storage.local.get('blockedSites', (data) => {
     let sites = data.blockedSites || {}
+
+    // Vérifier si on a déjà 10 sites
+    if (Object.keys(sites).length >= 10) {
+      showToast('Maximum 10 sites autorisés', 'error')
+      return
+    }
 
     // Assurer la compatibilité avec l'ancien format
     if (Array.isArray(sites)) {
@@ -179,7 +185,6 @@ function removeSite(site) {
       const timeKey = `scrollTime_${site}`
 
       chrome.storage.local.get([blockedKey], (data) => {
-
         // Vérifier si la valeur est true (booléen) ou 'true' (string)
         const isCurrentlyBlocked = data[blockedKey] === true || data[blockedKey] === 'true'
 
