@@ -4,9 +4,7 @@ let timer
 let hasBlocked = false
 let scrollLimit = 60000 // fallback par défaut
 let isScrolling = false
-console.log('🔵 CONTENT - Hostname original:', window.location.hostname)
 let currentSite = window.location.hostname.replace(/^www\./, '')
-console.log('🔵 CONTENT - Hostname nettoyé:', currentSite)
 
 /**
  * Vérifie si le site actuel doit être bloqué selon la configuration
@@ -140,7 +138,7 @@ function initializeScrollBlocker() {
   }
 
   // Vérifier toutes les 2 secondes si le blocage a été levé
-  setInterval(checkBlockedStatus, 2000)
+  setInterval(checkBlockedStatus, 1000)
 
   if (typeof chrome === 'undefined' || !chrome.storage) {
     return
@@ -206,7 +204,6 @@ function onScrollEnd() {
 
       // Sauvegarder le statut de blocage
       const blockedKey = `scrollBlocked_${currentSite}`
-      console.log(`🔴 CONTENT - Blocage activé pour ${currentSite}, clé: ${blockedKey}`)
       chrome.storage.local.set({ [blockedKey]: true }, () => {
         if (chrome.runtime.lastError) {
           // Erreur silencieuse, le blocage visuel fonctionnera quand même
